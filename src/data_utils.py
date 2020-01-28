@@ -412,7 +412,78 @@ def f1_flexible(probas, gts, th_start, th_stop, steps):
 
     scs = [f1_score(y_pred=probas > th, y_true=gts) for th in th_grid]
 
-    return max(scs)
+    i_max = np.argmax(scs)
+
+    return scs[i_max], th_grid[i_max]
+
+
+def f1_flexible_clip(probas, gts, th_start, th_stop, steps, th_score):
+    f1_max, th_max = f1_flexible(probas, gts, th_start, th_stop, steps)
+
+    if f1_max < th_score:
+        th_max = 1
+
+    return f1_max, th_max
+
+
+def select_th_for_each_sid(data: pd.DataFrame,
+                           probas: np.ndarray,
+                           th_score: float
+                           ) -> Dict[str, float]:
+    sids_list = data.segment_id.unique()
+    sid_to_th = {}
+
+    for sid in tqdm(sids_list):
+        w_sid = (data.segment_id == sid).values
+
+        _, th_max = f1_flexible_clip(probas=np.array(probas[:, 1])[w_sid],
+                                     gts=np.array(data['y'])[w_sid],
+                                     th_start=0, th_stop=1, steps=20,
+                                     th_score=th_score
+                                     )
+        sid_to_th[sid] = th_max
+
+    return sid_to_th
+
+
+def make_predict_many_th(data: pd.DataFrame,
+                         sid_to_th: Dict[str, float],
+                         probas: np.ndarray
+                         ) -> np.ndarray:
+    assert len(data) == len(probas)
+
+    sids_list = data.segment_id.unique()
+
+    predict = np.zeros(len(data))
+
+    for sid in sids_list:
+        w_sid = data.segment_id == sid
+        predict[w_sid] = probas[w_sid] > sid_to_th[sid]
+
+    return predict
+
+
+def run_many_th_experiment(data: pd.DataFrame, probas: np.ndarray, th_score: float) -> None:
+    n = len(data)
+
+    assert n == len(probas)
+
+    i_split = n // 2 - 10
+    ii_shuffle = np.random.permutation(n)
+    ii_train, ii_val = ii_shuffle[:i_split], ii_shuffle[i_split:]
+
+    train = data.loc[ii_train]
+    val = data.loc[ii_val]
+
+    sid_to_th = select_th_for_each_sid(train, probas[ii_train], th_score=th_score)
+
+    predict_train = make_predict_many_th(train, sid_to_th, probas[ii_train, 1])
+    predict_val = make_predict_many_th(val, sid_to_th, probas[ii_val, 1])
+
+    f1_train = f1_score(y_true=data.y[ii_train], y_pred=predict_train)
+    f1_val = f1_score(y_true=data.y[ii_val], y_pred=predict_val)
+
+    print(f'New score train: {f1_train}, new scre val: {f1_val}.')
 
 
 class F1(Callback):
@@ -432,12 +503,12 @@ class F1(Callback):
         self.gts.extend(last_target.cpu().tolist())
 
     def on_epoch_end(self, last_metrics, **kwargs):
-        m = f1_flexible(probas=np.array(self.probas),
-                        gts=np.array(self.gts),
-                        th_start=self.th_start,
-                        th_stop=self.th_stop,
-                        steps=self.steps
-                        )
+        m, _ = f1_flexible(probas=np.array(self.probas),
+                           gts=np.array(self.gts),
+                           th_start=self.th_start,
+                           th_stop=self.th_stop,
+                           steps=self.steps
+                           )
         return add_metrics(last_metrics, m)
 
 
