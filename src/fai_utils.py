@@ -1,21 +1,53 @@
-import datetime
-
 from fastai.callbacks.tracker import EarlyStoppingCallback, SaveModelCallback
 from fastai.tabular import *
 from matplotlib import pyplot as plt
-from torch import tensor
-from torch.nn import CrossEntropyLoss as CEloss
 
 import src.data_utils as u
+
+
+def sigmoid_focal_loss(
+        outputs: torch.Tensor,
+        targets: torch.Tensor,
+        weight,
+        gamma: float = 2.0,
+        alpha: float = 1.0,
+        reduction: str = "mean"
+):
+    targets = targets.type(outputs.type())
+    targets = torch.stack((targets < torch.tensor(0.5).cuda(),
+                           targets > torch.tensor(0.5).cuda())
+                          ).float().transpose(0, 1)
+
+    logpt = -F.binary_cross_entropy_with_logits(
+        outputs, targets, reduction="none", weight=weight
+    )
+    pt = torch.exp(logpt)
+
+    # compute the loss
+    loss = -((1 - pt).pow(gamma)) * logpt
+
+    if alpha is not None:
+        loss = loss * (alpha * targets + (1 - alpha) * (1 - targets))
+
+    if reduction == "mean":
+        loss = loss.mean()
+    if reduction == "sum":
+        loss = loss.sum()
+    if reduction == "batchwise_mean":
+        loss = loss.sum(0)
+
+    return loss
 
 
 def fit_predict_cv(train: pd.DataFrame,
                    test: pd.DataFrame,
                    val_ids: List[np.ndarray],
                    cat_cols: List[str],
-                   cont_names: List[str],
+                   cont_cols: List[str],
                    draw_plot: bool
                    ) -> Tuple[np.ndarray, List[float], List[float]]:
+    u.random_seed(42)
+
     device_ = torch.device('cuda:0') if torch.cuda.is_available() \
         else torch.device('cpu')
 
@@ -24,13 +56,14 @@ def fit_predict_cv(train: pd.DataFrame,
         'n_epochs': 10,
         'layers': [512, 256, 128],
         'weights': [1, 10],
-        'n_steps_f1': 20
+        'n_steps_f1': 20,
+        'emb_drop': 0.5
     }
 
     procs = [FillMissing, Categorify, Normalize]
 
-    test_tab = TabularList.from_df(test, cat_names=cat_cols,
-                                   cont_names=cont_names)
+    test_tab = TabularList.from_df(df=test, cat_names=cat_cols,
+                                   cont_names=cont_cols)
 
     k_fold = len(val_ids)
     probas_test = np.zeros((k_fold, len(test)), dtype=np.float16)
@@ -45,23 +78,26 @@ def fit_predict_cv(train: pd.DataFrame,
         print(f'Fold {1 + k} / {k_fold} start.')
 
         data_ = (TabularList.from_df(
-            train, procs=procs, cat_names=cat_cols, cont_names=cont_names)
+            train, procs=procs, cat_names=cat_cols, cont_names=cont_cols)
                  .split_by_idx(cur_val_ids)
                  .label_from_df(cols='y')
                  .add_test(test_tab)
                  .databunch(bs=p['bs']))
 
         learn = tabular_learner(data_, path=work_dir, layers=p['layers'],
+                                emb_drop=p['emb_drop'],
                                 metrics=u.F1(0, 1, steps=p['n_steps_f1']),
                                 callback_fns=[ShowGraph,
                                               partial(EarlyStoppingCallback,
                                                       monitor='f1',
                                                       min_delta=0.001,
-                                                      patience=5)
+                                                      patience=4)
                                               ],
-                                loss_func=CEloss(
-                                    weight=tensor(p['weights']).float().to(device_)
-                                ),
+                                # loss_func=CEloss(
+                                #     weight=tensor(p['weights']).float().to(device_)
+                                # ),
+                                loss_func=partial(sigmoid_focal_loss,
+                                                  weight=p['weights']).float().to(device_),
                                 opt_func=torch.optim.Adam
                                 )
         learn.lr_find()
@@ -91,7 +127,7 @@ def fit_predict_cv(train: pd.DataFrame,
         score, th = u.f1_flexible(gts=train['y'].values[cur_val_ids],
                                   probas=probas_val[:, 1],
                                   th_start=0, th_stop=1,
-                                  steps=2 * p['n_steps_f1'])
+                                  steps=p['n_steps_f1'])
         val_scores.append(score)
         ths.append(th)
 

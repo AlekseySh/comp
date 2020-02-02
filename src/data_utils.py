@@ -22,6 +22,47 @@ TStat = Dict[
 TFieldComb = List[Tuple[str, ...]]
 
 
+def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], List[str], List[str]]:
+
+    train = pd.read_pickle(data_path / 'train_3001.pkl')
+    test = pd.read_pickle(data_path / 'test_3001.pkl')
+
+    all_cols = ["segment_id", "weekday", "month", "hour", "dayofyear", "weekofyear", "s_hour",
+                "c_hour", "s_month", "c_month", "longitude", "latitude", "ROADNO", "CLASS",
+                "WIDTH", "LANES", "SURFTYPE", "PAVETYPE", "CONDITION", "length_1", "vds_id",
+                "lane_width", "sinuosity", "lon_centroid", "lat_centroid", "orientation", "camera_count",
+                "vms_count", "vds_count", "temp", "P0", "P", "humidity", "wind_dir", "wind_speed",
+                "visibility", "dewpoint", "max_gust", "cloud_cover", "weather_cond", "cloud_1",
+                "cloud1_cover", "cloud_height", "cloud_2", "cloud_3", "precip_time",
+                "cnt_event_with_veh", "cnt_veh", "cnt_event_with_inj", "cnt_inj", "sun_alt", "sun_az",
+                "avg_speed", "traffic1", "traffic2", "traffic3", "traffic_total", "mean_avg_speed",
+                "std_avg_speed", "rel_diff_avg_speed", "nx_std_avg_speed", "mean_traffic", "std_traffic",
+                "rel_diff_traffic", "nx_std_traffic", "blinding", "public_holiday", "school_holiday",
+                "delta_avg_speed_last_hour", "delta_avg_speed_next_hour", "delta_traffic_total_last_hour",
+                "delta_traffic_total_next_hour", "delta_rel_diff_avg_speed_last_hour",
+                "delta_rel_diff_avg_speed_next_hour", "delta_nx_std_avg_speed_last_hour",
+                "delta_nx_std_avg_speed_next_hour", "delta_rel_diff_traffic_last_hour",
+                "delta_rel_diff_traffic_next_hour", "delta_nx_std_traffic_last_hour",
+                "delta_nx_std_traffic_next_hour", "delta_cnt_event_with_veh_last_hour",
+                "delta_cnt_event_with_veh_next_hour", "delta_cnt_veh_last_hour", "delta_cnt_veh_next_hour",
+                "delta_cnt_event_with_inj_last_hour", "delta_cnt_event_with_inj_next_hour",
+                "delta_cnt_inj_last_hour", "delta_cnt_inj_next_hour", "last_quarter", "acc_cnt_last_quarter",
+                # "precip_mm",
+                ]
+
+    cat_cols = ['segment_id', 'weekday', 'month', 'hour', 'dayofyear',
+                'weekofyear', 'ROADNO', 'CLASS', 'SURFTYPE',
+                'PAVETYPE', 'CONDITION', 'vds_id', 'wind_dir', 'cloud_cover',
+                'weather_cond', 'cloud_1', 'cloud1_cover', 'cloud_height', 'cloud_2',
+                'cloud_3', 'public_holiday', 'school_holiday']
+
+    all_cols = list(filter(lambda x: ('veh' not in x) and ('inj' not in x), all_cols))
+
+    cont_cols = list(set(all_cols) - set(cat_cols))
+
+    return train, test, all_cols, cont_cols, cat_cols
+
+
 def add_velocity(data: pd.DataFrame, velocity_path: Path) -> None:
     velocity = pd.read_csv(velocity_path, parse_dates=['time'])
 
@@ -331,15 +372,20 @@ def scores(y_true: np.array,
 
 
 def estimate(model, validation_pool, y_true,
-             th_start=0, th_stop=1, steps=20
+             th_start=0, th_stop=1, steps=20, pred_probas=None
              ):
-    if isinstance(model, Learner):
-        probas_tensor, *_ = model.get_preds(DatasetType.Valid)
-        probas = probas_tensor[:, 1].cpu().numpy()
-        y_true = y_true
+    if pred_probas is None:
+
+        if isinstance(model, Learner):
+            probas_tensor, *_ = model.get_preds(DatasetType.Valid)
+            probas = probas_tensor[:, 1].cpu().numpy()
+            y_true = y_true
+        else:
+            probas = np.array(model.predict_proba(validation_pool))[:, 1]
+            y_true = np.array(validation_pool.get_label())
+
     else:
-        probas = np.array(model.predict_proba(validation_pool))[:, 1]
-        y_true = np.array(validation_pool.get_label())
+        probas = pred_probas
 
     ths = np.linspace(th_start, th_stop, steps)
 
