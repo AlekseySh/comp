@@ -26,11 +26,11 @@ def fit_predict_cv(train: pd.DataFrame,
 
     params = {
         'iterations': 1000,
-        'learning_rate': 0.35,
+        'learning_rate': 0.5,
         'scale_pos_weight': 10,
         'has_time': False,
         'one_hot_max_size': 1000,
-        'depth': 7,
+        'depth': 8,
 
         'loss_function': 'Logloss',
         'task_type': 'CPU',
@@ -38,7 +38,7 @@ def fit_predict_cv(train: pd.DataFrame,
         'eval_metric': FlexibleF1(0, 1, 20)
     }
 
-    exp_dir = Path('../results/cb/' + str(datetime.now()))
+    exp_dir = Path('/home/AlekseySh/code/comp/results/cb/' + str(datetime.now()))
     exp_dir.mkdir(exist_ok=True, parents=True)
 
     main_pool = Pool(data=train[all_cols], label=train['y'], cat_features=cat_cols)

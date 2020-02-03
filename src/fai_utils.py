@@ -2,6 +2,8 @@ from fastai.callbacks.tracker import EarlyStoppingCallback, SaveModelCallback
 from fastai.tabular import *
 from matplotlib import pyplot as plt
 from torch import tensor
+from torch.nn import CrossEntropyLoss as CEloss
+
 import src.data_utils as u
 
 
@@ -69,6 +71,7 @@ def fit_predict_cv(train: pd.DataFrame,
     probas_test = np.zeros((k_fold, len(test)), dtype=np.float16)
 
     work_dir = '../results/fai/'  # + str(datetime.datetime.now()).replace(' ', '')
+    Path(work_dir).mkdir(exist_ok=True, parents=True)
 
     with open(Path(work_dir) / 'parameters.json', 'w') as f:
         json.dump(p, f)
@@ -96,8 +99,6 @@ def fit_predict_cv(train: pd.DataFrame,
                                 loss_func=CEloss(
                                     weight=tensor(p['weights']).float().to(device_)
                                 ),
-                                # loss_func=partial(sigmoid_focal_loss,
-                                #                   weight=tensor(p['weights']).float().to(device_)),
                                 opt_func=torch.optim.Adam
                                 )
         learn.lr_find()

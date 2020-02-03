@@ -27,7 +27,7 @@ def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], L
     train = pd.read_pickle(data_path / 'train_3001.pkl')
     test = pd.read_pickle(data_path / 'test_3001.pkl')
 
-    all_cols = ["segment_id", "weekday", "month", "hour", "dayofyear", "weekofyear", "s_hour",
+    all_cols = ["segment_id", "weekday", "month", "hour", "s_hour",
                 "c_hour", "s_month", "c_month", "longitude", "latitude", "ROADNO", "CLASS",
                 "WIDTH", "LANES", "SURFTYPE", "PAVETYPE", "CONDITION", "length_1", "vds_id",
                 "lane_width", "sinuosity", "lon_centroid", "lat_centroid", "orientation", "camera_count",
@@ -48,6 +48,7 @@ def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], L
                 "delta_cnt_event_with_inj_last_hour", "delta_cnt_event_with_inj_next_hour",
                 "delta_cnt_inj_last_hour", "delta_cnt_inj_next_hour", "last_quarter", "acc_cnt_last_quarter",
                 # "precip_mm",
+                # "dayofyear", "weekofyear"
                 ]
 
     cat_cols = ['segment_id', 'weekday', 'month', 'hour', 'dayofyear',
@@ -194,6 +195,8 @@ def add_more_time(data: pd.DataFrame) -> None:
     data['day_n'] = data.time.dt.day
     data['month_n'] = data.time.dt.month
 
+    data['weekday'] = data['time'].dt.weekday
+
     print('Time data was added.')
 
 
@@ -306,7 +309,7 @@ def add_statistic(data: pd.DataFrame,
                   ) -> pd.DataFrame:
     check_fields(field_combs, data)
 
-    stat_data = select_by_time(stat_data, tstart, tend)
+    stat_data = select_by_time(stat_data, tstart, tend, 'time')
 
     stat = calculate_statistic(stat_data, field_combs)
 
