@@ -1,7 +1,7 @@
 from fastai.callbacks.tracker import EarlyStoppingCallback, SaveModelCallback
 from fastai.tabular import *
 from matplotlib import pyplot as plt
-
+from torch import tensor
 import src.data_utils as u
 
 
@@ -53,7 +53,7 @@ def fit_predict_cv(train: pd.DataFrame,
 
     p = {
         'bs': 200_000,
-        'n_epochs': 10,
+        'n_epochs': 20,
         'layers': [512, 256, 128],
         'weights': [1, 10],
         'n_steps_f1': 20,
@@ -91,13 +91,13 @@ def fit_predict_cv(train: pd.DataFrame,
                                               partial(EarlyStoppingCallback,
                                                       monitor='f1',
                                                       min_delta=0.001,
-                                                      patience=4)
+                                                      patience=7)
                                               ],
-                                # loss_func=CEloss(
-                                #     weight=tensor(p['weights']).float().to(device_)
-                                # ),
-                                loss_func=partial(sigmoid_focal_loss,
-                                                  weight=p['weights']).float().to(device_),
+                                loss_func=CEloss(
+                                    weight=tensor(p['weights']).float().to(device_)
+                                ),
+                                # loss_func=partial(sigmoid_focal_loss,
+                                #                   weight=tensor(p['weights']).float().to(device_)),
                                 opt_func=torch.optim.Adam
                                 )
         learn.lr_find()
