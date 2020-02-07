@@ -4,7 +4,8 @@ from matplotlib import pyplot as plt
 from torch import tensor
 from torch.nn import CrossEntropyLoss as CEloss
 
-import src.data_utils as u
+import src.utils as u
+from src.utils import f1_flexible
 
 
 def sigmoid_focal_loss(
@@ -89,7 +90,7 @@ def fit_predict_cv(train: pd.DataFrame,
 
         learn = tabular_learner(data_, path=work_dir, layers=p['layers'],
                                 emb_drop=p['emb_drop'],
-                                metrics=u.F1(0, 1, steps=p['n_steps_f1']),
+                                metrics=F1(0, 1, steps=p['n_steps_f1']),
                                 callback_fns=[ShowGraph,
                                               partial(EarlyStoppingCallback,
                                                       monitor='f1',
@@ -150,3 +151,30 @@ def get_max_from_log(learn: Learner,
     print(f'Best score arised on {i_max} epoch: {max_score}.')
 
     return max_score
+
+
+class F1(Callback):
+
+    def __init__(self, th_start=0, th_stop=1, steps=20):
+        self.th_start = th_start
+        self.th_stop = th_stop
+        self.steps = steps
+        self.probas, self.gts = [], []
+
+    def on_epoch_begin(self, **kwargs):
+        self.probas, self.gts = [], []
+
+    def on_batch_end(self, last_output, last_target, **kwargs):
+        probas = softmax(last_output, dim=1)[:, 1].cpu().numpy()
+        self.probas.extend(probas)
+
+        self.gts.extend(last_target.cpu().tolist())
+
+    def on_epoch_end(self, last_metrics, **kwargs):
+        m, _ = f1_flexible(probas=np.array(self.probas),
+                           gts=np.array(self.gts),
+                           th_start=self.th_start,
+                           th_stop=self.th_stop,
+                           steps=self.steps
+                           )
+        return add_metrics(last_metrics, m)

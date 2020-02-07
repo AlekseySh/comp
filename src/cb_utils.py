@@ -8,7 +8,7 @@ import pandas as pd
 from catboost import CatBoostClassifier, Pool
 from sklearn.metrics import f1_score
 
-import src.data_utils as u
+import src.utils as u
 
 warnings.filterwarnings('ignore')
 

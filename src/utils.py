@@ -9,9 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 from fastai.basic_train import Learner
-from fastai.tabular import *
 from sklearn.metrics import f1_score, precision_score, recall_score
-from torch.nn.functional import softmax
 from tqdm.auto import tqdm
 
 TStat = Dict[
@@ -23,7 +21,6 @@ TFieldComb = List[Tuple[str, ...]]
 
 
 def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], List[str], List[str]]:
-
     train = pd.read_pickle(data_path / 'train_3001.pkl')
     test = pd.read_pickle(data_path / 'test_3001.pkl')
 
@@ -34,30 +31,27 @@ def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], L
                 "vms_count", "vds_count", "temp", "P0", "P", "humidity", "wind_dir", "wind_speed",
                 "visibility", "dewpoint", "max_gust", "cloud_cover", "weather_cond", "cloud_1",
                 "cloud1_cover", "cloud_height", "cloud_2", "cloud_3", "precip_time",
-                "cnt_event_with_veh", "cnt_veh", "cnt_event_with_inj", "cnt_inj", "sun_alt", "sun_az",
+                "sun_alt", "sun_az",
                 "avg_speed", "traffic1", "traffic2", "traffic3", "traffic_total", "mean_avg_speed",
-                "std_avg_speed", "rel_diff_avg_speed", "nx_std_avg_speed", "mean_traffic", "std_traffic",
-                "rel_diff_traffic", "nx_std_traffic", "blinding", "public_holiday", "school_holiday",
+                "std_avg_speed", "rel_diff_avg_speed", "mean_traffic", "std_traffic",
+                "rel_diff_traffic", "blinding", "public_holiday", "school_holiday",
                 "delta_avg_speed_last_hour", "delta_avg_speed_next_hour", "delta_traffic_total_last_hour",
                 "delta_traffic_total_next_hour", "delta_rel_diff_avg_speed_last_hour",
-                "delta_rel_diff_avg_speed_next_hour", "delta_nx_std_avg_speed_last_hour",
-                "delta_nx_std_avg_speed_next_hour", "delta_rel_diff_traffic_last_hour",
-                "delta_rel_diff_traffic_next_hour", "delta_nx_std_traffic_last_hour",
-                "delta_nx_std_traffic_next_hour", "delta_cnt_event_with_veh_last_hour",
-                "delta_cnt_event_with_veh_next_hour", "delta_cnt_veh_last_hour", "delta_cnt_veh_next_hour",
-                "delta_cnt_event_with_inj_last_hour", "delta_cnt_event_with_inj_next_hour",
-                "delta_cnt_inj_last_hour", "delta_cnt_inj_next_hour", "last_quarter", "acc_cnt_last_quarter",
+                "delta_rel_diff_avg_speed_next_hour",
+                "delta_rel_diff_traffic_last_hour",
+                "delta_rel_diff_traffic_next_hour", "acc_cnt_last_quarter",
                 # "precip_mm",
-                # "dayofyear", "weekofyear"
+                # "dayofyear", "weekofyear",
+                # last_quarter
                 ]
 
-    cat_cols = ['segment_id', 'weekday', 'month', 'hour', 'dayofyear',
-                'weekofyear', 'ROADNO', 'CLASS', 'SURFTYPE',
+    cat_cols = ['segment_id', 'weekday', 'month', 'hour',
+                'ROADNO', 'CLASS', 'SURFTYPE',
                 'PAVETYPE', 'CONDITION', 'vds_id', 'wind_dir', 'cloud_cover',
                 'weather_cond', 'cloud_1', 'cloud1_cover', 'cloud_height', 'cloud_2',
                 'cloud_3', 'public_holiday', 'school_holiday']
 
-    all_cols = list(filter(lambda x: ('veh' not in x) and ('inj' not in x), all_cols))
+    all_cols = list(filter(lambda x: ('veh' not in x) and ('inj' not in x) and ('nx_std' not in x), all_cols))
 
     cont_cols = list(set(all_cols) - set(cat_cols))
 
@@ -533,32 +527,6 @@ def run_many_th_experiment(data: pd.DataFrame, probas: np.ndarray, th_score: flo
     f1_val = f1_score(y_true=data.y[ii_val], y_pred=predict_val)
 
     print(f'New score train: {f1_train}, new scre val: {f1_val}.')
-
-
-class F1(Callback):
-
-    def __init__(self, th_start=0, th_stop=1, steps=20):
-        self.th_start = th_start
-        self.th_stop = th_stop
-        self.steps = steps
-
-    def on_epoch_begin(self, **kwargs):
-        self.probas, self.gts = [], []
-
-    def on_batch_end(self, last_output, last_target, **kwargs):
-        probas = softmax(last_output, dim=1)[:, 1].cpu().numpy()
-        self.probas.extend(probas)
-
-        self.gts.extend(last_target.cpu().tolist())
-
-    def on_epoch_end(self, last_metrics, **kwargs):
-        m, _ = f1_flexible(probas=np.array(self.probas),
-                           gts=np.array(self.gts),
-                           th_start=self.th_start,
-                           th_stop=self.th_stop,
-                           steps=self.steps
-                           )
-        return add_metrics(last_metrics, m)
 
 
 def random_seed(seed_value: int = 42) -> None:
