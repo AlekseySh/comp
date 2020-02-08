@@ -103,20 +103,6 @@ def predict_multi_models(models, ths, pool, mode='vote'):
     return pred
 
 
-def vote_predict(probas, ths):
-    assert probas.shape[0] == len(ths)
-
-    n_model = len(ths)
-    counts = np.zeros(probas.shape[1])
-    for i_model in range(n_model):
-        pred_i = probas[i_model, :] > ths[i_model]
-
-        counts += pred_i
-
-    pred = counts >= np.ceil(n_model / 2)
-    return pred
-
-
 def train_resume_gpu(init_params,
                      train_params,
                      n_iter,
@@ -156,33 +142,6 @@ def train_resume_gpu(init_params,
             break
 
     return cur_model
-
-
-def check():
-    train_data, train_labels, eval_data, eval_labels, eval_dataset, cat_features = get_data()
-
-    train_pool = Pool(data=train_data, label=train_labels, cat_features=cat_features)
-    val_pool = Pool(data=eval_data, label=eval_labels, cat_features=cat_features)
-
-    init_params = {'learning_rate': 0.1,
-                   'task_type': 'CPU',
-                   'has_time': True,
-                   'eval_metric': 'F1'
-                   }
-
-    train_params = {}
-
-    model = train(init_params=init_params,
-                  train_params=train_params,
-                  n_iter=200,
-                  train_pool=train_pool,
-                  val_pool=val_pool,
-                  eval_freq=10,
-                  stopper_n_obs=30,
-                  stopper_delta=0.01
-                  )
-
-    print(model)
 
 
 class FlexibleF1(object):
@@ -229,91 +188,3 @@ class FlexibleF1(object):
             score = max(scores)
 
             return score, 1.0
-
-
-def get_data():
-    cat_features = [0, 1, 2]
-
-    train_data = [["a", "b", 1, 4, 5, 6],
-                  ["a", "b", 4, 5, 6, 7],
-                  ["c", "d", 30, 40, 50, 60]]
-
-    train_labels = [1, 1, 0]
-
-    eval_data = [["a", "c", 3, 4, 4, 1],
-                 ["a", "d", 1, 5, 5, 5],
-                 ["b", "d", 31, 25, 60, 70],
-                 ["b", "a", 31, 1, 60, 70],
-                 ["b", "a", 31, 1, 2, 1]]
-
-    eval_labels = [0, 1, 1, 0, 1]
-
-    eval_dataset = Pool(eval_data,
-                        label=eval_labels,
-                        cat_features=cat_features)
-
-    return train_data, train_labels, eval_data, eval_labels, eval_dataset, cat_features
-
-
-def check_flexible():
-    train_data, train_labels, eval_data, eval_labels, eval_dataset, cat_features = get_data()
-
-    # Initialize CatBoostClassifier with custom `eval_metric`
-    flexible_f1 = FlexibleF1(0.1, 0.7, 10)
-    model = CatBoostClassifier(iterations=5,
-                               eval_metric=flexible_f1,
-                               loss_function='Logloss')
-
-    # Fit model with `use_best_model=True`
-    model.fit(train_data,
-              train_labels,
-              cat_features,
-              use_best_model=True,
-              eval_set=eval_dataset)
-
-    # Get predictions
-    pred = model.predict_proba(eval_data)
-
-    scores = [f1_score(y_pred=pred[:, 1] > th,
-                       y_true=np.array(eval_labels)
-                       )
-              for th in flexible_f1.th_grid]
-
-    score = max(scores)
-    print('score', score)
-
-
-def check_th():
-    train_data, train_labels, eval_data, eval_labels, eval_dataset, cat_features = get_data()
-
-    # Initialize CatBoostClassifier with custom `eval_metric`
-    th_f1 = FlexibleF1(0.5, 0.5, 1)
-    n_it = 5
-    model = CatBoostClassifier(iterations=n_it,
-                               eval_metric=th_f1,
-                               loss_function='Logloss')
-
-    # Fit model with `use_best_model=True`
-    model.fit(train_data,
-              train_labels,
-              cat_features,
-              use_best_model=True,
-              eval_set=eval_dataset)
-
-    # lib version
-    model2 = CatBoostClassifier(iterations=n_it,
-                                eval_metric='F1',
-                                loss_function='Logloss')
-
-    # Fit model with `use_best_model=True`
-    model2.fit(train_data,
-               train_labels,
-               cat_features,
-               use_best_model=True,
-               eval_set=eval_dataset)
-
-
-if __name__ == '__main__':
-    check_flexible()
-    check_th()
-    check()

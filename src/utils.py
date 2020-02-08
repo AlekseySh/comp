@@ -1,8 +1,7 @@
 import random
 from collections import Counter
-from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, Tuple, List, DefaultDict, Counter as TCounter
+from typing import Dict, Tuple, List, Counter as TCounter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -58,23 +57,6 @@ def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], L
     return train, test, all_cols, cont_cols, cat_cols
 
 
-def add_velocity(data: pd.DataFrame, velocity_path: Path) -> None:
-    velocity = pd.read_csv(velocity_path, parse_dates=['time'])
-
-    velocity['time'] = velocity.time.dt.floor('H')
-
-    dsid_str = 'datetime x segment_id'
-    velocity[dsid_str] = velocity.time.astype(str) + ' x ' + velocity.sid
-
-    dsid_to_vehcount = defaultdict(lambda: np.nan, zip(velocity[dsid_str], velocity.veh_count))
-    dsid_to_vel = defaultdict(lambda: np.nan, zip(velocity[dsid_str], velocity.vel))
-
-    data['vel'] = data[dsid_str].apply(lambda dsid: dsid_to_vel[dsid])
-    data['veh_count'] = data[dsid_str].apply(lambda dsid: dsid_to_vehcount[dsid])
-
-    print('Velocity data was added.')
-
-
 def add_zeros(data_ones: pd.DataFrame) -> pd.DataFrame:
     trange = pd.date_range('2016-01-01', '2019-04-01', freq='1h')[:-1]
 
@@ -98,84 +80,6 @@ def add_zeros(data_ones: pd.DataFrame) -> pd.DataFrame:
 
     print('Zeros were added.')
     return data
-
-
-def read_vehinj(vehinj_dir: Path) -> pd.DataFrame:
-    veh = pd.read_csv(vehinj_dir / 'Vehicles2016_2019.csv',
-                      parse_dates=['CreatedLOcalDateTime'],
-                      usecols=['CreatedLOcalDateTime', 'EventID'],
-                      dayfirst=True
-                      )
-
-    inj = pd.read_csv(vehinj_dir / 'Injuries2016_2019.csv',
-                      parse_dates=['Created Local Date Time'],
-                      usecols=['Created Local Date Time', 'Event Id'],
-                      dayfirst=True
-                      )
-
-    veh = veh.rename(columns={'CreatedLOcalDateTime': 'time'})
-    inj = inj.rename(columns={'Created Local Date Time': 'time',
-                              'Event Id': 'EventID'})
-
-    vehinj = pd.concat([veh, inj], sort=False).dropna()  # only 1 rec is nat
-    vehinj['EventID'] = vehinj['EventID'].astype(int)
-
-    return vehinj
-
-
-def add_vehinj(data: pd.DataFrame, vehinj_dir: Path) -> None:
-    vehinj = read_vehinj(vehinj_dir)
-
-    vehinj['time'] = vehinj.time.dt.floor('H')
-
-    vehinj_counter = Counter(vehinj.time)
-
-    data['n_vehinj'] = data.time.apply(lambda tkey: vehinj_counter[tkey])
-
-    print('Veh and inj data were added.')
-
-
-def add_sid_data(data: pd.DataFrame, road_segments: pd.DataFrame) -> None:
-    assert 'sid' in data.columns.values.tolist()
-
-    def sid_to_smth(default_val: Any,
-                    field_name: str
-                    ) -> DefaultDict[str, Any]:
-        return defaultdict(lambda: default_val,
-                           zip(road_segments.segment_id, road_segments[field_name])
-                           )
-
-    road_segments.WIDTH = road_segments.WIDTH.astype('str')
-    road_segments.LANES = road_segments.LANES.astype('str')
-
-    sids = np.array(data.sid)
-
-    sid_to_length = sid_to_smth(500, 'length_1')
-    sid_to_condition = sid_to_smth('Good', 'CONDITION')
-    sid_to_width = sid_to_smth('0.0', 'WIDTH')
-    sid_to_roadno = sid_to_smth('N1', 'ROADNO')
-    sid_to_lanes = sid_to_smth('2', 'LANES')
-
-    length_1 = np.zeros(len(data))
-    condition = np.chararray(len(data), 10)
-    width = np.chararray(len(data), 5)
-    roadno = np.chararray(len(data), 15)
-    lanes = np.chararray(len(data), 5)
-
-    for i, sid in tqdm(enumerate(sids), total=len(sids)):
-        length_1[i] = sid_to_length[sid]
-        condition[i] = str(sid_to_condition[sid])
-        width[i] = str(sid_to_width[sid])
-        roadno[i] = str(sid_to_roadno[sid])
-        lanes[i] = str(sid_to_lanes[sid])
-
-    data['length_1'] = length_1
-    data['condition'] = condition
-    data['width'] = width
-    data['roadno'] = roadno
-    data['lanes'] = lanes
-
-    print('Sid data was added.')
 
 
 def add_more_time(data: pd.DataFrame) -> None:
@@ -539,3 +443,17 @@ def random_seed(seed_value: int = 42) -> None:
         torch.cuda.manual_seed_all(seed_value)  # gpu vars
         torch.backends.cudnn.deterministic = True  # needed
         torch.backends.cudnn.benchmark = False
+
+
+def vote_predict(probas, ths):
+    assert probas.shape[0] == len(ths)
+
+    n_model = len(ths)
+    counts = np.zeros(probas.shape[1])
+    for i_model in range(n_model):
+        pred_i = probas[i_model, :] > ths[i_model]
+
+        counts += pred_i
+
+    pred = counts >= np.ceil(n_model / 2)
+    return pred
