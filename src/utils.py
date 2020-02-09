@@ -20,39 +20,35 @@ TFieldComb = List[Tuple[str, ...]]
 
 
 def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], List[str], List[str]]:
-    train = pd.read_pickle(data_path / 'train_3001.pkl')
-    test = pd.read_pickle(data_path / 'test_3001.pkl')
+    train = pd.read_pickle(data_path / 'train_0802_fin.pkl')
+    test = pd.read_pickle(data_path / 'test_0802_final.pkl')
 
-    all_cols = ["segment_id", "weekday", "month", "hour", "s_hour",
-                "c_hour", "s_month", "c_month", "longitude", "latitude", "ROADNO", "CLASS",
-                "WIDTH", "LANES", "SURFTYPE", "PAVETYPE", "CONDITION", "length_1", "vds_id",
-                "lane_width", "sinuosity", "lon_centroid", "lat_centroid", "orientation", "camera_count",
-                "vms_count", "vds_count", "temp", "P0", "P", "humidity", "wind_dir", "wind_speed",
-                "visibility", "dewpoint", "max_gust", "cloud_cover", "weather_cond", "cloud_1",
-                "cloud1_cover", "cloud_height", "cloud_2", "cloud_3", "precip_time",
-                "sun_alt", "sun_az",
-                "avg_speed", "traffic1", "traffic2", "traffic3", "traffic_total", "mean_avg_speed",
-                "std_avg_speed", "rel_diff_avg_speed", "mean_traffic", "std_traffic",
-                "rel_diff_traffic", "blinding", "public_holiday", "school_holiday",
-                "delta_avg_speed_last_hour", "delta_avg_speed_next_hour", "delta_traffic_total_last_hour",
-                "delta_traffic_total_next_hour", "delta_rel_diff_avg_speed_last_hour",
-                "delta_rel_diff_avg_speed_next_hour",
-                "delta_rel_diff_traffic_last_hour",
-                "delta_rel_diff_traffic_next_hour", "acc_cnt_last_quarter",
-                # "precip_mm",
-                # "dayofyear", "weekofyear",
-                # last_quarter
-                ]
+    cols_to_drop = ['datetime x segment_id',
+                    'datetime',
+                    'acc_count_sid_hour',
+                    'acc_count_sid_weekday',
+                    'acc_count_sid_month',
+                    'acc_count_vds_hour',
+                    'acc_count_vds_weekday',
+                    'acc_count_vds_month',
+                    'y']
+
+    all_cols = list(set(train.columns.values) - set(cols_to_drop))
 
     cat_cols = ['segment_id', 'weekday', 'month', 'hour',
-                'ROADNO', 'CLASS', 'SURFTYPE',
-                'PAVETYPE', 'CONDITION', 'vds_id', 'wind_dir', 'cloud_cover',
-                'weather_cond', 'cloud_1', 'cloud1_cover', 'cloud_height', 'cloud_2',
-                'cloud_3', 'public_holiday', 'school_holiday']
-
-    all_cols = list(filter(lambda x: ('veh' not in x) and ('inj' not in x) and ('nx_std' not in x), all_cols))
+                'ROADNO', 'CLASS', 'LANES', 'SURFTYPE',
+                'PAVETYPE', 'CONDITION', 'vds_id', 'wind_dir',
+                'weather_cond', 'cloud_1', 'cloud_2',
+                'cloud_3', 'cloud_cover_fog', 'wind_dir_defined',
+                'mist', 'fog', 'smoke', 'rain', 'drizzle', 'snow',
+                'traffic_unknown', 'speed_unknown',
+                'public_holiday', 'school_holiday', 'day_period',
+                'average_ttime_na']
 
     cont_cols = list(set(all_cols) - set(cat_cols))
+
+    test[cat_cols] = test[cat_cols].replace(np.nan, 'NAN').astype(str)
+    train[cat_cols] = train[cat_cols].replace(np.nan, 'NAN').astype(str)
 
     return train, test, all_cols, cont_cols, cat_cols
 
