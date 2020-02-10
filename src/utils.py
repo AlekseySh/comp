@@ -1,22 +1,18 @@
 import random
-from collections import Counter
+import warnings
 from pathlib import Path
-from typing import Dict, Tuple, List, Counter as TCounter
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
 from fastai.basic_train import Learner
-from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import precision_score, recall_score
 from tqdm.auto import tqdm
 
-TStat = Dict[
-    Tuple[str, ...],  # (2018_stat_day_month, ...)
-    TCounter[Tuple[str, ...]]  # {('Sid421", 'Friday'): 25, ...}
-]
-
-TFieldComb = List[Tuple[str, ...]]
+warnings.filterwarnings('ignore')
 
 
 def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], List[str], List[str]]:
@@ -51,31 +47,6 @@ def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], L
     train[cat_cols] = train[cat_cols].replace(np.nan, 'NAN').astype(str)
 
     return train, test, all_cols, cont_cols, cat_cols
-
-
-def add_zeros(data_ones: pd.DataFrame) -> pd.DataFrame:
-    trange = pd.date_range('2016-01-01', '2019-04-01', freq='1h')[:-1]
-
-    sids = list(data_ones.sid.unique())
-
-    ttrange = trange.repeat(len(sids))
-    ssids = pd.Series(sids * len(trange))
-
-    data = pd.DataFrame({'datetime x segment_id': ttrange.astype(str) + ' x ' + ssids,
-                         'time': pd.to_datetime(ttrange), 'sid': ssids})
-
-    data = data.join(data_ones.set_index('datetime x segment_id'),
-                     on='datetime x segment_id',
-                     how='left', rsuffix='_ones')
-
-    data = data.drop(columns=['time_ones', 'sid_ones'])
-    data = data.fillna(value=0)
-
-    assert ((min(data.time) <= data_ones.time) & (data_ones.time <= max(data.time))).all()
-    assert sum(data.target) == len(data_ones)
-
-    print('Zeros were added.')
-    return data
 
 
 def add_more_time(data: pd.DataFrame) -> None:
@@ -127,36 +98,6 @@ def read_ones(train_path: Path) -> pd.DataFrame:
     return ones
 
 
-def split_low_high(df: pd.DataFrame,
-                   n_most_low: int,
-                   verbose: bool = True
-                   ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    # Drop sids with smallest number of events
-
-    sid_counter = Counter(df.sid)
-    sorted_counts = sorted(list(sid_counter.values()))
-    th = sorted_counts[n_most_low]
-    sids_low = set([sid for sid, count in sid_counter.items() if count < th])
-    sids_high = set(df.sid) - sids_low
-
-    assert sids_high.symmetric_difference(sids_low) == set(df.sid)
-
-    w_high = df.sid.isin(sids_high)
-    df_high = df[w_high]
-    df_low = df[~w_high]
-
-    df_low.reset_index(drop=True, inplace=True)
-    df_high.reset_index(drop=True, inplace=True)
-
-    if verbose:
-        ratio = 1 - sum(sorted_counts[n_most_low:]) / sum(sorted_counts)
-        print(f'We select {n_most_low} sids, it is'
-              f' {round(100 * ratio, 3)}% of'
-              f' events, th: {th} events per history.')
-
-    return df_high, df_low
-
-
 def select_by_time(df: pd.DataFrame,
                    tstart: str,
                    tend: str,
@@ -168,60 +109,6 @@ def select_by_time(df: pd.DataFrame,
     df_select.reset_index(drop=True, inplace=True)
 
     return df_select
-
-
-def check_fields(field_combs: TFieldComb, data: pd.DataFrame) -> None:
-    fields_required = set([field for comb in field_combs for field in comb])
-    fields = set(data.columns.values.tolist())
-
-    assert fields_required.issubset(fields), (fields_required, fields)
-
-
-def calculate_statistic(data_stat: pd.DataFrame,
-                        field_combs: TFieldComb
-                        ) -> TStat:
-    check_fields(field_combs, data_stat)
-
-    stat: TStat = {comb: Counter() for comb in field_combs}
-
-    for row in data_stat.itertuples():
-
-        for comb in field_combs:
-            field_values = [getattr(row, field) for field in comb]
-
-            stat[comb][tuple(field_values)] += 1
-
-    return stat
-
-
-def add_statistic(data: pd.DataFrame,
-                  stat_data: pd.DataFrame,
-                  tstart: str,
-                  tend: str,
-                  field_combs: TFieldComb,
-                  prefix: str
-                  ) -> pd.DataFrame:
-    check_fields(field_combs, data)
-
-    stat_data = select_by_time(stat_data, tstart, tend, 'time')
-
-    stat = calculate_statistic(stat_data, field_combs)
-
-    vectors = {comb: np.zeros(len(data)) for comb in field_combs}
-
-    print('Statistic appending:')
-    for row in tqdm(data.itertuples(), total=len(data)):
-
-        for comb in field_combs:
-            field_values = [getattr(row, field) for field in comb]
-
-            vectors[comb][row.Index] = stat[comb][tuple(field_values)]
-
-    period_coef = (pd.Timestamp(tend) - pd.Timestamp(tstart)).days
-    for key in vectors.keys():
-        data[prefix + '_'.join(key)] = vectors[key] / period_coef
-
-    print('Statistic data was added added.')
 
 
 def plot_events(events_time: pd.Series) -> None:
@@ -350,85 +237,6 @@ def proc_silent_intervals(data: pd.DataFrame) -> pd.DataFrame:
     return data_res
 
 
-def f1_flexible(probas, gts, th_start, th_stop, steps):
-    th_grid = np.linspace(start=th_start, stop=th_stop, num=steps)
-
-    scs = [f1_score(y_pred=probas > th, y_true=gts) for th in th_grid]
-
-    i_max = np.argmax(scs)
-
-    return scs[i_max], th_grid[i_max]
-
-
-def f1_flexible_clip(probas, gts, th_start, th_stop, steps, th_score):
-    f1_max, th_max = f1_flexible(probas, gts, th_start, th_stop, steps)
-
-    if f1_max < th_score:
-        th_max = 1
-
-    return f1_max, th_max
-
-
-def select_th_for_each_sid(data: pd.DataFrame,
-                           probas: np.ndarray,
-                           th_score: float
-                           ) -> Dict[str, float]:
-    sids_list = data.segment_id.unique()
-    sid_to_th = {}
-
-    for sid in tqdm(sids_list):
-        w_sid = (data.segment_id == sid).values
-
-        _, th_max = f1_flexible_clip(probas=np.array(probas[:, 1])[w_sid],
-                                     gts=np.array(data['y'])[w_sid],
-                                     th_start=0, th_stop=1, steps=20,
-                                     th_score=th_score
-                                     )
-        sid_to_th[sid] = th_max
-
-    return sid_to_th
-
-
-def make_predict_many_th(data: pd.DataFrame,
-                         sid_to_th: Dict[str, float],
-                         probas: np.ndarray
-                         ) -> np.ndarray:
-    assert len(data) == len(probas)
-
-    sids_list = data.segment_id.unique()
-
-    predict = np.zeros(len(data))
-
-    for sid in sids_list:
-        w_sid = data.segment_id == sid
-        predict[w_sid] = probas[w_sid] > sid_to_th[sid]
-
-    return predict
-
-
-def run_many_th_experiment(data: pd.DataFrame, probas: np.ndarray, th_score: float) -> None:
-    n = len(data)
-
-    assert n == len(probas)
-
-    i_split = n // 2 - 10
-    ii_shuffle = np.random.permutation(n)
-    ii_train, ii_val = ii_shuffle[:i_split], ii_shuffle[i_split:]
-
-    train = data.loc[ii_train]
-    val = data.loc[ii_val]
-
-    sid_to_th = select_th_for_each_sid(train, probas[ii_train], th_score=th_score)
-
-    predict_train = make_predict_many_th(train, sid_to_th, probas[ii_train, 1])
-    predict_val = make_predict_many_th(val, sid_to_th, probas[ii_val, 1])
-
-    f1_train = f1_score(y_true=data.y[ii_train], y_pred=predict_train)
-    f1_val = f1_score(y_true=data.y[ii_val], y_pred=predict_val)
-
-    print(f'New score train: {f1_train}, new scre val: {f1_val}.')
-
-
 def random_seed(seed_value: int = 42) -> None:
     use_cuda = torch.cuda.is_available()
     np.random.seed(seed_value)  # cpu vars
@@ -441,15 +249,78 @@ def random_seed(seed_value: int = 42) -> None:
         torch.backends.cudnn.benchmark = False
 
 
-def vote_predict(probas, ths):
-    assert probas.shape[0] == len(ths)
+# === Utils for models ===
 
-    n_model = len(ths)
-    counts = np.zeros(probas.shape[1])
-    for i_model in range(n_model):
-        pred_i = probas[i_model, :] > ths[i_model]
+class F1(Callback):
+    # Callback for fastai neural model
 
-        counts += pred_i
+    def __init__(self, th_start=0, th_stop=1, steps=20):
+        self.th_start = th_start
+        self.th_stop = th_stop
+        self.steps = steps
+        self.probas, self.gts = [], []
 
-    pred = counts >= np.ceil(n_model / 2)
-    return pred
+    def on_epoch_begin(self, **kwargs):
+        self.probas, self.gts = [], []
+
+    def on_batch_end(self, last_output, last_target, **kwargs):
+        probas = softmax(last_output, dim=1)[:, 1].cpu().numpy()
+        self.probas.extend(probas)
+
+        self.gts.extend(last_target.cpu().tolist())
+
+    def on_epoch_end(self, last_metrics, **kwargs):
+        m, _ = f1_flexible(probas=np.array(self.probas),
+                           gts=np.array(self.gts),
+                           th_start=self.th_start,
+                           th_stop=self.th_stop,
+                           steps=self.steps
+                           )
+        return add_metrics(last_metrics, m)
+
+
+class FlexibleF1(object):
+    # F1 calculator for catboost
+
+    def __init__(self,
+                 th_start: float = 0.0,
+                 th_stop: float = 1.0,
+                 steps: int = 20
+                 ):
+        self.th_grid = np.linspace(start=th_start,
+                                   stop=th_stop,
+                                   num=steps
+                                   )
+        self.train_call = False
+
+    @staticmethod
+    def is_max_optimal() -> bool:
+        return True
+
+    @staticmethod
+    def get_final_error(error, _):
+        return error
+
+    def evaluate(self, approxes, target, _) -> float:
+        self.train_call = ~self.train_call
+
+        if self.train_call:
+            return 0, 1.0
+
+        else:
+            assert len(approxes) == 1
+            assert len(target) == len(approxes[0])
+
+            approx = np.array(approxes[0])
+
+            exps = np.exp(approx)
+            probs = exps / (1 + exps)
+
+            f1_scores = [f1_score(y_pred=probs > th,
+                                  y_true=np.array(target)
+                                  )
+                         for th in self.th_grid]
+
+            score = max(f1_scores)
+
+            return score, 1.0
