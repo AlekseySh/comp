@@ -1,5 +1,6 @@
 import random
 import warnings
+from functools import partial
 from pathlib import Path
 from typing import List, Tuple
 
@@ -7,13 +8,73 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from fastai.callback import Callback
 from fastai.basic_train import Learner
+from fastai.callback import Callback
+from fastai.callbacks.tracker import EarlyStoppingCallback, SaveModelCallback
+from fastai.tabular import (FillMissing, Categorify, Normalize,
+                            TabularList, tabular_learner, ShowGraph)
+from fastai.tabular import add_metrics
 from sklearn.metrics import f1_score
 from sklearn.metrics import precision_score, recall_score
+from torch import tensor
+from torch.nn import CrossEntropyLoss as CEloss
+from torch.nn.functional import softmax
 from tqdm.auto import tqdm
 
 warnings.filterwarnings('ignore')
+
+
+def train_fai_model(train: pd.DataFrame,
+                    test: pd.DataFrame,
+                    cat_cols: List[str],
+                    cont_cols: List[str],
+                    seed: int
+                    ):
+    random_seed(seed)
+
+    # val_ids = (train_full.datetime >= pd.Timestamp('2018-10-01')).values
+    val_ids = list(range(50_000, 99_999))
+
+    procs = [FillMissing, Categorify, Normalize]
+
+    test_tab = TabularList.from_df(df=test, cat_names=cat_cols, cont_names=cont_cols)
+
+    data = (TabularList.from_df(
+        train, procs=procs, cat_names=cat_cols, cont_names=cont_cols)
+            .split_by_idx(val_ids)
+            .label_from_df(cols='y')
+            .add_test(test_tab)
+            .databunch(bs=10_000)
+            )
+
+    learn = tabular_learner(data, layers=[1024, 512, 256, 128],
+                            metrics=F1(th_start=0, th_stop=1, steps=20),
+                            callback_fns=[ShowGraph,
+                                          partial(EarlyStoppingCallback,
+                                                  monitor='f1',
+                                                  min_delta=0.001,
+                                                  patience=5)
+                                          ],
+                            loss_func=CEloss(
+                                weight=tensor([1, 10]).float().cuda()
+                            ),
+                            opt_func=torch.optim.Adam
+                            )
+
+    learn.lr_find()
+    learn.recorder.plot()
+    plt.show()
+
+    learn.fit_one_cycle(3, max_lr=slice(5e-3),
+                        callbacks=[SaveModelCallback(learn, every='improvement',
+                                                     monitor='f1', name='best_epoch')]
+                        )
+
+    learn.recorder.plot_losses()
+    learn.recorder.plot_lr()
+    plt.show()
+
+    return learn
 
 
 def read_data(train_path: Path,
@@ -22,15 +83,8 @@ def read_data(train_path: Path,
     train = pd.read_pickle(train_path)
     test = pd.read_pickle(test_path)
 
-    cols_to_drop = ['datetime x segment_id',
-                    'datetime',
-                    'acc_count_sid_hour',
-                    'acc_count_sid_weekday',
-                    'acc_count_sid_month',
-                    'acc_count_vds_hour',
-                    'acc_count_vds_weekday',
-                    'acc_count_vds_month',
-                    'y']
+    cols_to_drop = ['datetime x segment_id', 'datetime',
+                    'lane_width', 'y', 'main_route', 'speed_unknown']
 
     all_cols = list(set(train.columns.values) - set(cols_to_drop))
 
@@ -40,14 +94,19 @@ def read_data(train_path: Path,
                 'weather_cond', 'cloud_1', 'cloud_2',
                 'cloud_3', 'cloud_cover_fog', 'wind_dir_defined',
                 'mist', 'fog', 'smoke', 'rain', 'drizzle', 'snow',
-                'traffic_unknown', 'speed_unknown',
-                'public_holiday', 'school_holiday', 'day_period',
-                'average_ttime_na']
+                'traffic_unknown', 'public_holiday', 'school_holiday',
+                'day_period', 'average_ttime_na']
 
     cont_cols = list(set(all_cols) - set(cat_cols))
 
     test[cat_cols] = test[cat_cols].replace(np.nan, 'NAN').astype(str)
     train[cat_cols] = train[cat_cols].replace(np.nan, 'NAN').astype(str)
+
+    test['y'].replace(np.nan, '', inplace=True)
+
+    for f in cont_cols:
+        test[f] = test[f].fillna(0)
+        train[f] = train[f].fillna(0)
 
     return train, test, all_cols, cont_cols, cat_cols
 
@@ -63,20 +122,6 @@ def select_by_time(df: pd.DataFrame,
     df_select.reset_index(drop=True, inplace=True)
 
     return df_select
-
-
-def scores(y_true: np.array,
-           y_pred: np.array,
-           verbose: bool = True
-           ) -> Tuple[float, float, float]:
-    f = f1_score(y_true=y_true, y_pred=y_pred)
-    r = recall_score(y_true=y_true, y_pred=y_pred)
-    p = precision_score(y_true=y_true, y_pred=y_pred)
-
-    if verbose:
-        print(f'f1: {f}, recall: {r}, precision: {p}')
-
-    return f, r, p
 
 
 def estimate(model, validation_pool, y_true,
@@ -119,6 +164,7 @@ def estimate(model, validation_pool, y_true,
     plt.show()
 
     return th_max
+
 
 def random_seed(seed_value: int = 42) -> None:
     use_cuda = torch.cuda.is_available()
@@ -165,6 +211,14 @@ def plot_sid_events(data: pd.DataFrame, sid: str, tstart: str, tend: str) -> Non
 
 
 # ======== Utils for models ========
+
+
+def f1_flexible(probas, gts, th_start, th_stop, steps):
+    th_grid = np.linspace(start=th_start, stop=th_stop, num=steps)
+    scs = [f1_score(y_pred=probas > th, y_true=gts) for th in th_grid]
+    id_max = np.argmax(scs)
+    return scs[id_max], th_grid[id_max]
+
 
 class F1(Callback):
     # Callback for Fastai neural model

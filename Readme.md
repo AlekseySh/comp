@@ -74,13 +74,13 @@ submit format: for each road segment for each timestmap - `segment_ttime_daily.c
 
 
 ### Downaload resulted TRAIN and TEST files
-To avoid wasting time on generating and formatting files,
+To avoid wasting several hours on generating and formatting files,
 you can download ones: [todo1](link1.com) and [todo2](link2.com).
 You can easily verify that the data in the tables doesn't contain data leak and
 data from datasets that aren't available to other participants. Please, after downloading 
 this files just store
 them as `data/train*.pkl` and `data/test*.pkl`.
- 
+
 
 ## 2. Model training
 

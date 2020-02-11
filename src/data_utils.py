@@ -1,11 +1,12 @@
+import datetime
 import math
 from typing import Dict, Tuple, Optional, Iterable, List
 
+import numpy as np
 import pandas as pd
 from pysolar.solar import get_altitude, get_azimuth
-from shapely.geometry import LineString
-
 from pytz import timezone
+from shapely.geometry import LineString
 
 CAPETOWN_CENTER_LAT = -34.270836
 CAPETOWN_CENTER_LON = 18.459778
@@ -211,7 +212,9 @@ def proc_silent_intervals(data: pd.DataFrame) -> pd.DataFrame:
     return data_res
 
 
-def clean_vds_data(vds_hourly: pd.DataFrame) -> pd.DataFrame:
+def clean_vds_data(vds_hourly: pd.DataFrame,
+                   vds_locations: pd.DataFrame
+                   ) -> pd.DataFrame:
     vds_hourly['Site name'] = vds_hourly['Site name'].replace({'DS ': '',
                                                                'V': 'VDS',
                                                                'WTRNX ': 'VDS',
@@ -221,13 +224,13 @@ def clean_vds_data(vds_hourly: pd.DataFrame) -> pd.DataFrame:
                                                                ' North': 'N',
                                                                ' ': ''}, regex=True)
 
-    vds_id_to_edit1 = vds_hourly.loc[~vds_hourly['Site name'].isin(VDS_locations['Asset Desc.'])]['Site name'].unique()
+    vds_id_to_edit1 = vds_hourly.loc[~vds_hourly['Site name'].isin(vds_locations['Asset Desc.'])]['Site name'].unique()
 
     vds_id_edited1 = [el[:-1] for el in vds_id_to_edit1]
 
     vds_hourly['Site name'] = vds_hourly['Site name'].replace(vds_id_to_edit1, vds_id_edited1)
 
-    vds_id_to_edit2 = vds_hourly.loc[~vds_hourly['Site name'].isin(VDS_locations['Asset Desc.'])]['Site name'].unique()
+    vds_id_to_edit2 = vds_hourly.loc[~vds_hourly['Site name'].isin(vds_locations['Asset Desc.'])]['Site name'].unique()
 
     vds_id_edited2 = ['VDS123', 'VDS220A', 'VDS269', 'VDS269', 'VDS405A', 'VDS407',
                       'VDS705', 'VDS705', 'VDS266', 'VDS266', 'VDS113', 'VDS112', 'VDS112']
