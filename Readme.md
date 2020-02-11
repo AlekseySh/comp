@@ -33,7 +33,7 @@ created 3 more columns:
 2. `vds_id` - the neareast VDS camera id to the road segment.
 3. `num` - the enumarate id of the road segment.
 
-![](data/routes.png)
+![](pics/routes.png)
 
 
 ### Weather
