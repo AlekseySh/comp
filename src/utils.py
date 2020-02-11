@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from fastai.callback import Callback
 from fastai.basic_train import Learner
 from sklearn.metrics import f1_score
 from sklearn.metrics import precision_score, recall_score
@@ -15,9 +16,11 @@ from tqdm.auto import tqdm
 warnings.filterwarnings('ignore')
 
 
-def read_data(data_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], List[str], List[str]]:
-    train = pd.read_pickle(data_path / 'train_0802_fin.pkl')
-    test = pd.read_pickle(data_path / 'test_0802_final.pkl')
+def read_data(train_path: Path,
+              test_path: Path
+              ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str], List[str], List[str]]:
+    train = pd.read_pickle(train_path)
+    test = pd.read_pickle(test_path)
 
     cols_to_drop = ['datetime x segment_id',
                     'datetime',
