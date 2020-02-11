@@ -1,4 +1,4 @@
-# comp
+# Commands for neu.ro platform
 
 # Description
 
