@@ -120,47 +120,6 @@ def estimate(model, validation_pool, y_true,
 
     return th_max
 
-
-def proc_silent_intervals(data: pd.DataFrame) -> pd.DataFrame:
-    silent_ints = list(map(
-        lambda x: (pd.Timestamp(x[0]), pd.Timestamp(x[1])),
-        [
-            ('2016-07-14 17:00', '2016-08-01 07:00'),
-            ('2016-08-14 17:00', '2016-09-01 08:00'),
-            ('2018-08-13 16:00', '2018-09-01 06:00'),
-        ]
-    ))
-
-    exception_sids = {'03RHJ3G', '0ICKV72', '0PU7VDI',
-                      '0W39BFY', '16WNX7T', '1K4ZYII',
-                      '2J6C2D5', '3IQ1GWG', '8LOVJZ3',
-                      '8PK91S2', 'AJRKP0C', 'BC5XKSB',
-                      'CTB99FS', 'D7SS5LM', 'DRNRL0M',
-                      'F5UCVMI', 'H9QJECU', 'IUTMY1U',
-                      'JT4HGZ2', 'K3N8ADC', 'L4CWZBU',
-                      'M4U0X5G', 'MRQ81XJ', 'Q03FQ74',
-                      'Q0VL8BD', 'SQ3W7J8', 'TC7A716',
-                      'TONSERE', 'UUZT4OE', 'UXERJVK',
-                      'VBUCV9N', 'W0EUG1C', 'WRJK3P3',
-                      'XOCWI97', 'YGRV6SD', 'YNCIDMW'}
-    # this sids are still active even in "silence" periods
-
-    is_silent = data.datetime.apply(
-        lambda t0: any([(a < t0) & (t0 < b) for (a, b) in silent_ints])
-    )
-
-    w_left = data.segment_id.isin(exception_sids) | (~is_silent)
-    data_res = data[w_left]
-    data_res.reset_index(drop=True, inplace=True)
-
-    n, n_res = len(data), len(data_res)
-    print(f'{n - n_res} records inside the silents periods were dropped.')
-
-    assert sum(data_res.y.astype(bool)) == sum(data.y.astype(bool))
-
-    return data_res
-
-
 def random_seed(seed_value: int = 42) -> None:
     use_cuda = torch.cuda.is_available()
     np.random.seed(seed_value)  # cpu vars
