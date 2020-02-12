@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+
+from fastai.basic_data import DatasetType
 from fastai.basic_train import Learner
 from fastai.callback import Callback
 from fastai.callbacks.tracker import EarlyStoppingCallback, SaveModelCallback
@@ -22,60 +24,6 @@ from torch.nn.functional import softmax
 from tqdm.auto import tqdm
 
 warnings.filterwarnings('ignore')
-
-
-def train_fai_model(train: pd.DataFrame,
-                    test: pd.DataFrame,
-                    cat_cols: List[str],
-                    cont_cols: List[str],
-                    seed: int
-                    ):
-    random_seed(seed)
-
-    # val_ids = (train_full.datetime >= pd.Timestamp('2018-10-01')).values
-    val_ids = list(range(50_000, 99_999))
-
-    procs = [FillMissing, Categorify, Normalize]
-
-    test_tab = TabularList.from_df(df=test, cat_names=cat_cols, cont_names=cont_cols)
-
-    data = (TabularList.from_df(
-        train, procs=procs, cat_names=cat_cols, cont_names=cont_cols)
-            .split_by_idx(val_ids)
-            .label_from_df(cols='y')
-            .add_test(test_tab)
-            .databunch(bs=10_000)
-            )
-
-    learn = tabular_learner(data, layers=[1024, 512, 256, 128],
-                            metrics=F1(th_start=0, th_stop=1, steps=20),
-                            callback_fns=[ShowGraph,
-                                          partial(EarlyStoppingCallback,
-                                                  monitor='f1',
-                                                  min_delta=0.001,
-                                                  patience=5)
-                                          ],
-                            loss_func=CEloss(
-                                weight=tensor([1, 10]).float().cuda()
-                            ),
-                            opt_func=torch.optim.Adam
-                            )
-
-    learn.lr_find()
-    learn.recorder.plot()
-    plt.show()
-
-    learn.fit_one_cycle(3, max_lr=slice(5e-3),
-                        callbacks=[SaveModelCallback(learn, every='improvement',
-                                                     monitor='f1', name='best_epoch')]
-                        )
-
-    learn.recorder.plot_losses()
-    learn.recorder.plot_lr()
-    plt.show()
-
-    return learn
-
 
 def read_data(train_path: Path,
               test_path: Path
@@ -110,6 +58,62 @@ def read_data(train_path: Path,
 
     return train, test, all_cols, cont_cols, cat_cols
 
+def create_fai_databunch(train: pd.DataFrame,
+                        test: pd.DataFrame,
+                        cat_cols: List[str],
+                        cont_cols: List[str],
+                        seed: int
+                        ):
+    random_seed(seed)
+
+    val_ids = train[train.datetime >= pd.Timestamp('2018-10-01')].index
+#     val_ids = list(range(50_000, 99_999))
+
+    procs = [FillMissing, Categorify, Normalize]
+
+    test_tab = TabularList.from_df(df=test, cat_names=cat_cols, cont_names=cont_cols)
+
+    data = (TabularList.from_df(
+        train, procs=procs, cat_names=cat_cols, cont_names=cont_cols)
+            .split_by_idx(val_ids)
+            .label_from_df(cols='y')
+            .add_test(test_tab)
+            .databunch(bs=10_000)
+            )
+    
+    return data
+
+def train_fai_model(data, seed: int):
+    random_seed(seed)
+
+    learn = tabular_learner(data, layers=[1024, 512, 256, 128],
+                            metrics=F1(th_start=0, th_stop=1, steps=101),
+                            callback_fns=[ShowGraph,
+                                          partial(EarlyStoppingCallback,
+                                                  monitor='f1',
+                                                  min_delta=0.0001,
+                                                  patience=4)
+                                          ],
+                            loss_func=CEloss(
+                                weight=tensor([1, 10]).float().cuda()
+                            ),
+                            opt_func=torch.optim.Adam
+                            )
+
+    learn.lr_find()
+    learn.recorder.plot()
+    plt.show()
+
+    learn.fit_one_cycle(12, max_lr=slice(5e-3),
+                        callbacks=[SaveModelCallback(learn, every='improvement',
+                                                     monitor='f1', name='best_epoch')]
+                        )
+
+    learn.recorder.plot_losses()
+    learn.recorder.plot_lr()
+    plt.show()
+
+    return learn
 
 def select_by_time(df: pd.DataFrame,
                    tstart: str,
@@ -125,7 +129,7 @@ def select_by_time(df: pd.DataFrame,
 
 
 def estimate(model, validation_pool, y_true,
-             th_start=0, th_stop=1, steps=20, pred_probas=None
+             th_start=0, th_stop=1, steps=101, pred_probas=None
              ):
     if pred_probas is None:
 
