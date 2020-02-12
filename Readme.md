@@ -1,6 +1,6 @@
 # INSTRUCTION for reproducing 3rd place solution (team: gusi-lebedi).
 
-1. [Download](https://drive.google.com/file/d/1qhKx_vOchuBijy44TYB_2midGDhyUoOp/view?usp=sharing) 
+1. [Download](https://drive.google.com/file/d/19opUsM8CM-qKS36fJI5Ag0yt41dmWQdO/view?usp=sharing) 
 base datasets and files collected and processed by us.
 Unzip and put this folder in the root of project folder.
 To see how we generated these files you can run  `notebooks/additional_data_preprocessing.ipynb`

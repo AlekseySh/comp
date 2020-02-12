@@ -223,7 +223,7 @@ def prepare_sanral(sanral_v3_path: Path,
                           'Hour of Collection Period', 'Average Speed', 'Average Speed', 'Average Speed',
                           'Count of Vehicle Class 1', 'Count of Vehicle Class 2', 'Count of Vehicle Class 3']
 
-    vds_hourly = vds_hourly.loc[:, ~vds_hourly.columns.duplicated()]
+    vds_hourly = vds_hourly.loc[:, ~vds_hourly.columns.duplicated()]  # type: ignore
 
     vds_hourly.sort_values(['Date of Collection Period', 'Hour of Collection Period']).to_csv(result_hourly_path,
                                                                                               index=False)

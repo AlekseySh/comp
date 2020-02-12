@@ -1,12 +1,18 @@
 import json
 from pathlib import Path
+from typing import Dict, List, Any, Tuple
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+TAnyDict = Dict[str, Any]
 
-def make_uzone_to_enum(enum_to_uzone):
+TEnumToUzone = Dict[str, Dict[str, List[str]]]
+
+
+def make_uzone_to_enum(enum_to_uzone: TEnumToUzone
+                       ) -> Dict[str, Dict[str, int]]:
     uzone_to_enum = {}
 
     for routno, enum_to_uzone_rout in enum_to_uzone.items():
@@ -25,13 +31,17 @@ def make_uzone_to_enum(enum_to_uzone):
     return uzone_to_enum
 
 
-def load_uber_data(routes_path,
-                   sid_to_enum_path,
-                   enum_to_uzone_path,
-                   routes_length_path,
-                   uzone_times_path
-                   ):
-    def load(fpath):
+def load_uber_data(routes_path: str,
+                   sid_to_enum_path: str,
+                   enum_to_uzone_path: str,
+                   routes_length_path: str,
+                   uzone_times_path: str
+                   ) -> Tuple[TAnyDict,
+                              Dict[str, int],
+                              TEnumToUzone,
+                              pd.DataFrame,
+                              TAnyDict]:
+    def load(fpath: str) -> TAnyDict:
         return json.load(open(fpath, 'r'))
 
     routes = load(routes_path)
@@ -48,14 +58,19 @@ def load_uber_data(routes_path,
     return routes, sid_to_enum, enum_to_uzone, uzones_times, routes_length
 
 
-def find(l, x):
+def find(l, x):  # type: ignore
     if x in l:
         return l.index(x)
     else:
         return None
 
 
-def assign_ttimes_to_sids(routes, routes_length, sid_to_enum, uzone_to_enum, zone_ab_to_time):
+def assign_ttimes_to_sids(routes: TAnyDict,
+                          routes_length: TAnyDict,
+                          sid_to_enum: Dict[str, int],
+                          uzone_to_enum: TAnyDict,
+                          zone_ab_to_time: Dict[Tuple[str, str], float]
+                          ) -> pd.DataFrame:
     sids, enums = list(zip(*sid_to_enum.items()))
     sid_times = pd.DataFrame(data={'segment_id': sids, 'enums': enums})
     sid_times['ttime_to_center'] = np.nan
@@ -142,13 +157,13 @@ def assign_ttimes_to_sids(routes, routes_length, sid_to_enum, uzone_to_enum, zon
     return sid_times
 
 
-def process_uber_data(routes_path,
-                      sid_to_enum_path,
-                      enum_to_uzone_path,
-                      routes_length_path,
-                      uzone_times_path,
-                      result_segment_ttime_path
-                      ):
+def process_uber_data(routes_path: str,
+                      sid_to_enum_path: str,
+                      enum_to_uzone_path: str,
+                      routes_length_path: str,
+                      uzone_times_path: str,
+                      result_segment_ttime_path: str
+                      ) -> None:
     if Path(result_segment_ttime_path).is_file():
         print(f'File {result_segment_ttime_path} is already exists.')
         return
@@ -215,7 +230,7 @@ def process_uber_data(routes_path,
         result_segment_ttime_path, index=False)
 
 
-def concat_uber_files(uber_files_dir, result_fpath):
+def concat_uber_files(uber_files_dir: Path, result_fpath: str) -> None:
     if Path(result_fpath).is_file():
         print(f'File {result_fpath} is already exists.')
         return

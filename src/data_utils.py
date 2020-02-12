@@ -128,7 +128,7 @@ def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_feature_based_on_neighbs(data: pd.DataFrame,
                                  fval: str,
                                  num_to_neighbors: Dict[str, List[Optional[int]]]
-                                 ):
+                                 ) -> None:
     siddate_to_val = dict(zip(zip(data['num'], data['datetime']), data[fval]))
 
     def get_val(n_dt: Tuple[str, pd.Timestamp]) -> Optional[float]:

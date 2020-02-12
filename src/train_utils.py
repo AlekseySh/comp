@@ -3,7 +3,7 @@ import random
 import warnings
 from functools import partial
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Any
 
 import numpy as np
 import pandas as pd
@@ -23,23 +23,23 @@ from sklearn.metrics import precision_score, recall_score
 from torch import tensor
 from torch.nn import CrossEntropyLoss as CEloss
 from torch.nn.functional import softmax
-from tqdm.auto import tqdm
 
 warnings.filterwarnings('ignore')
 
 
-def estimate(learn, th_start=0, th_stop=1, steps=20):
+def estimate(learn: Learner,
+             th_start: float = 0.0,
+             th_stop: float = 1.0,
+             steps: int = 20
+             ) -> Tuple[float, float]:
     probas_tensor, *_ = learn.get_preds(DatasetType.Valid)
     probas = probas_tensor[:, 1].cpu().numpy()
 
     y_true = learn.data.label_list.valid.y.items
 
-    ths = np.linspace(th_start, th_stop, steps)
+    score_max, th_max = f1_flexible(probas=probas, gts=y_true, th_start=th_start,
+                                    th_stop=th_stop, steps=steps)
 
-    sc = [f1_score(y_true=y_true, y_pred=probas > th) for th in tqdm(ths)]
-
-    i_max = np.argmax(sc)
-    score_max, th_max = sc[i_max], ths[i_max]
     events = sum(probas > th_max)
 
     precision_max = precision_score(y_true=y_true, y_pred=probas > th_max)
@@ -52,10 +52,6 @@ def estimate(learn, th_start=0, th_stop=1, steps=20):
           '\n events  pred', events,
           '\n events true', sum(y_true)
           )
-
-    plt.plot(ths, sc)
-    plt.grid('on')
-    plt.show()
 
     return th_max, score_max
 
@@ -71,32 +67,50 @@ def random_seed(seed_value: int = 42) -> None:
         torch.backends.cudnn.deterministic = True  # needed
 
 
-def f1_flexible(probas, gts, th_start, th_stop, steps):
+def f1_flexible(probas: np.ndarray,
+                gts: np.ndarray,
+                th_start: float,
+                th_stop: float,
+                steps: int,
+                need_plot: bool = False
+                ) -> Tuple[float, float]:
     th_grid = np.linspace(start=th_start, stop=th_stop, num=steps)
     scs = [f1_score(y_pred=probas > th, y_true=gts) for th in th_grid]
     id_max = np.argmax(scs)
+
+    if need_plot:
+        plt.plot(th_grid, scs)
+        plt.grid('on')
+        plt.show()
+
     return scs[id_max], th_grid[id_max]
 
 
 class F1(Callback):
     # Callback for Fastai neural model
 
-    def __init__(self, th_start=0, th_stop=1, steps=20):
+    def __init__(self, th_start: float = 0.0, th_stop: float = 1.0, steps: int = 20):
         self.th_start = th_start
         self.th_stop = th_stop
         self.steps = steps
+
+        self.probas: List[float] = []
+        self.gts: List[float] = []
+
+    def on_epoch_begin(self, **kwargs: Dict[str, Any]) -> None:
         self.probas, self.gts = [], []
 
-    def on_epoch_begin(self, **kwargs):
-        self.probas, self.gts = [], []
-
-    def on_batch_end(self, last_output, last_target, **kwargs):
+    def on_batch_end(self,
+                     last_output: torch.Tensor,
+                     last_target: torch.Tensor,
+                     **kwargs: Dict[str, Any]
+                     ) -> None:
         probas = softmax(last_output, dim=1)[:, 1].cpu().numpy()
         self.probas.extend(probas)
 
         self.gts.extend(last_target.cpu().tolist())
 
-    def on_epoch_end(self, last_metrics, **kwargs):
+    def on_epoch_end(self, last_metrics: Any, **kwargs: Dict[str, Any]) -> Dict[str, Any]:
         m, _ = f1_flexible(probas=np.array(self.probas),
                            gts=np.array(self.gts),
                            th_start=self.th_start,
@@ -184,7 +198,8 @@ def train_fai_model(data: DataBunch) -> Learner:
                             opt_func=torch.optim.Adam
                             )
     learn.lr_find()
-    learn.fit_one_cycle(10, max_lr=slice(5e-3),
+    lr_slice = slice(5e-3)  # type: ignore
+    learn.fit_one_cycle(10, max_lr=lr_slice,
                         callbacks=[SaveModelCallback(learn, every='improvement',
                                                      monitor='f1', name='best_' + time)]
                         )
