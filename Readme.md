@@ -1,10 +1,9 @@
-# Instruction to reproduce 3d place solution (team: gusi-lebedi).
+# INSTRUCTION to reproduce 3d place solution (team: gusi-lebedi).
 
 1. [Download](https://drive.google.com/file/d/1qhKx_vOchuBijy44TYB_2midGDhyUoOp/view?usp=sharing) 
 base dataset and files collected and processed by us.
 Unzip and put this folder in the root of project folder.
-If you want to generate files in `_processed` from scratch, you can delete them and
-than use `notebooks/additional_data_preprocessing.ipynb`
+To see how we generated this files you can run  `notebooks/additional_data_preprocessing.ipynb`
 (see `data exploration` section below for more details).
 
 2. Having all needed files, you can generate `train*.pkl` and `test*.pkl`
@@ -19,10 +18,14 @@ them as `data/train*.pkl` and `data/test*.pkl`.
 to train neural network and reproduce submit.
 
 Resulted folder structure should look like this:
+
 ![](pics/dirs.png)
 
+Please, don't pay attention to `Makefile`, `setup.cfg`, `apt.txt`,
+and `Neuro.md`, we used them only for working with our GPU cloud.
 
-# Data exploration
+
+# DATA EXPLORATION
 Let's discuss what exact data we used and how we processed
 it in `notebooks/additional_data_preprocessing.ipynb`.
 
@@ -95,7 +98,7 @@ replaced all road segment names with numbers (`sid_to_enum.json`) using
 submit format: for each road segment for each timestmap - `segment_ttime_daily.csv`.
 
 
-# Model overview
+# MODEL OVERVIEW
 
 Training model is much simpler than feature engeneering: we trained single neural network 
 (we used `fastai` framework for this purpose) without
