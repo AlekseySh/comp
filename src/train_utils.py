@@ -202,7 +202,7 @@ def train_fai_model(data: DataBunch) -> Learner:
     lr_slice = slice(5e-3)  # type: ignore
     learn.fit_one_cycle(10, max_lr=lr_slice,
                         callbacks=[SaveModelCallback(learn, every='improvement',
-                                                     monitor='f1', name='best_model' + time)]
+                                                     monitor='f1', name='best_model')]
                         )
 
     return learn
