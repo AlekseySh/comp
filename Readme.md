@@ -1,3 +1,5 @@
+# Uber Movement SANRAL Cape Town Challenge
+
 # INSTRUCTION for reproducing 3rd place solution (team: gusi-lebedi).
 
 1. [Download](https://drive.google.com/file/d/19opUsM8CM-qKS36fJI5Ag0yt41dmWQdO/view?usp=sharing) 
@@ -108,4 +110,5 @@ any ensembling with 1-fold local validation.
 and `test*.pkl` as inputs,
 generated (or downloaded) on the previous step. As an output, this will give the 
 submit file and the model weights.
-Estimated time of model training on nvidia-tesla k80 is about 30 min.
+Estimated time of 1 attempt of model training on nvidia-tesla k80 is about 30 min, but we do several attempts
+and choose the best.

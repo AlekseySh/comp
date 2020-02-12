@@ -127,7 +127,8 @@ def read_data(train_path: Path,
     train = pd.read_pickle(train_path)
 
     cols_to_drop = ['datetime x segment_id', 'datetime',
-                    'lane_width', 'y', 'main_route', 'speed_unknown']
+                    'lane_width', 'y', 'main_route', 'speed_unknown',
+                    'mean_average_ttime', 'std_average_ttime']
 
     all_cols = list(set(train.columns.values) - set(cols_to_drop))
 
@@ -148,8 +149,9 @@ def read_data(train_path: Path,
     test['y'].replace(np.nan, '', inplace=True)
 
     for f in cont_cols:
-        test[f] = test[f].fillna(0)
-        train[f] = train[f].fillna(0)
+        if 'next' in f.lower():
+            test[f] = test[f].fillna(0)
+            train[f] = train[f].fillna(0)
 
     return train, test, all_cols, cont_cols, cat_cols
 
@@ -159,8 +161,8 @@ def create_fai_databunch(train: pd.DataFrame,
                          cat_cols: List[str],
                          cont_cols: List[str],
                          ) -> DataBunch:
-    train = train[train.datetime >= '2016-10-01']
-    train.reset_index(inplace=True, drop=True)
+    # train = train[train.datetime >= '2016-10-01']
+    # train.reset_index(inplace=True, drop=True)
 
     val_ids = train[train.datetime >= pd.Timestamp('2018-10-01')].index
 
@@ -180,9 +182,10 @@ def create_fai_databunch(train: pd.DataFrame,
 
 
 def train_fai_model(data: DataBunch) -> Learner:
-    work_dir = Path('../results/')
-    work_dir.mkdir(exist_ok=True, parents=True)
     time = str(datetime.datetime.now().time())
+
+    work_dir = Path(f'../results/{time}')
+    work_dir.mkdir(exist_ok=True, parents=True)
 
     learn = tabular_learner(data, path=work_dir, layers=[1024, 512, 256, 128],
                             metrics=F1(th_start=0, th_stop=1, steps=51),
@@ -190,18 +193,16 @@ def train_fai_model(data: DataBunch) -> Learner:
                                           partial(EarlyStoppingCallback,
                                                   monitor='f1',
                                                   min_delta=0.00001,
-                                                  patience=4)
+                                                  patience=3)
                                           ],
                             loss_func=CEloss(
                                 weight=tensor([1, 10]).float().cuda()
-                            ),
-                            opt_func=torch.optim.Adam
-                            )
+                            ))
     learn.lr_find()
     lr_slice = slice(5e-3)  # type: ignore
     learn.fit_one_cycle(10, max_lr=lr_slice,
                         callbacks=[SaveModelCallback(learn, every='improvement',
-                                                     monitor='f1', name='best_' + time)]
+                                                     monitor='f1', name='best_model' + time)]
                         )
 
     return learn
