@@ -17,7 +17,9 @@ data from datasets that aren't available to other participants. Please, store
 them as `data/train*.pkl` and `data/test*.pkl`.
 
 3. Having `train*.pkl` and `test*.pkl` use `notebooks/modelling_fai.ipynb` 
-to train neural network and reproduce submit.
+to train neural network and reproduce our submit. NOTE! For reproducing our results exactly please 
+set PYTHONHASHSEED before running notebook. So, the start command should look like this:
+`env PYTHONHASHSEED=42 jupyter notebook`.
 
 Resulting folder structure should look like this:
 
@@ -110,5 +112,4 @@ any ensembling with 1-fold local validation.
 and `test*.pkl` as inputs,
 generated (or downloaded) on the previous step. As an output, this will give the 
 submit file and the model weights.
-Estimated time of 1 attempt of model training on nvidia-tesla k80 is about 30 min, but we do several attempts
-and choose the best.
+Estimated time of 1 attempt of model training on nvidia-tesla k80 is about 30 min.
