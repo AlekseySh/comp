@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -246,3 +247,42 @@ def concat_uber_files(uber_files_dir: Path, result_fpath: str) -> None:
     frame_daily = frame_daily.dropna(axis=0, how='all', subset=['Daily Mean Travel Time (Seconds)'])
 
     frame_daily.to_csv(result_fpath, index=False)
+
+
+def gen_segments_length_file(shape_path: str, routes_path: str, routes_length_path: str) -> None:
+    if Path(routes_length_path).is_file():
+        print(f'File {routes_length_path} is already exists.')
+        return
+
+    road_segments = gpd.read_file(shape_path)
+    routes = json.load(open(routes_path, 'r'))
+
+    sid_length = pd.Series(road_segments.length_1.values, index=road_segments.num).to_dict()
+    for routno, route in routes.items():
+        for direction in ['to_center', 'from_center']:
+            routes[routno][direction] = list(map(sid_length.get, routes[routno][direction]))
+
+    with open(routes_length_path, 'w') as fp:
+        json.dump(routes, fp)
+
+
+def gen_neighbors_from_routes(routes_path: str, sid_neigh_path: str) -> None:
+    if Path(sid_neigh_path).is_file():
+        print(f'File {sid_neigh_path} is already exists.')
+        return
+
+    routes = json.load(open(routes_path, 'r'))
+
+    sid_neighbors = {'to_center': {},
+                     'from_center': {}
+                     }
+
+    for routno, route in routes.items():
+        for direction in route:
+            for idx, sid in enumerate(route[direction]):
+                sid_neighbors[direction][sid] = (route[direction][idx - 1] if idx > 0 else None,
+                                                 route[direction][idx + 1] if idx < len(
+                                                     route[direction]) - 1 else None)
+
+    with open(sid_neigh_path, 'w') as fp:
+        json.dump(sid_neighbors, fp)
