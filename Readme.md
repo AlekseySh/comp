@@ -1,4 +1,4 @@
-# Uber Movement SANRAL Cape Town Challenge
+# [Uber Movement SANRAL Cape Town Challenge](https://zindi.africa/competitions/uber-movement-sanral-cape-town-challenge)
 
 # INSTRUCTION for reproducing 2rd place solution (team: gusi-lebedi).
 
