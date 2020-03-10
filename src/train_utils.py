@@ -160,11 +160,12 @@ def create_fai_databunch(train: pd.DataFrame,
                          test: pd.DataFrame,
                          cat_cols: List[str],
                          cont_cols: List[str],
+                         val_start: str
                          ) -> DataBunch:
     # train = train[train.datetime >= '2016-10-01']
     # train.reset_index(inplace=True, drop=True)
 
-    val_ids = train[train.datetime >= pd.Timestamp('2018-10-01')].index
+    val_ids = train[train.datetime >= pd.Timestamp(val_start)].index
 
     procs = [FillMissing, Categorify, Normalize]
 
