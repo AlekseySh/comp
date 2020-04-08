@@ -1,6 +1,6 @@
 # [Uber Movement SANRAL Cape Town Challenge](https://zindi.africa/competitions/uber-movement-sanral-cape-town-challenge)
 
-[SLIDES](https://drive.google.com/open?id=1J7NnayPI837LfsLB1vjUMNYaKefcVSRef7VeiRckpw4)
+[SLIDES](https://docs.google.com/presentation/d/1J7NnayPI837LfsLB1vjUMNYaKefcVSRef7VeiRckpw4/edit?usp=sharing)
 
 
 # INSTRUCTION for reproducing 2nd place solution (team: gusi-lebedi).
